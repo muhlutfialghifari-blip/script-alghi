@@ -1,37 +1,24 @@
 -- =========================================================
--- SCRIPT FISH IT - MINIMALIST MOBILE VERSION
--- Fitur: Draggable Button, Auto-Stop on Close, Compact UI
+-- SCRIPT FISH IT - ORION MOBILE VERSION (FIXED)
+-- Fitur: Ringan, Draggable Button, Kill Switch, Auto-Fish
 -- =========================================================
 
--- 1. GLOBAL KILL SWITCH (Untuk mematikan fitur total)
-getgenv().ScriptActive = true 
+-- Kill Switch Global
+getgenv().ScriptActive = true
 
-local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
-local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
-local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
+-- Memuat Library Orion (Lebih Ringan & Stabil di HP)
+local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/shlexware/Orion/main/source')))()
 
--- 2. TAMPILAN LEBIH KECIL (MINIMALIS)
-local Window = Fluent:CreateWindow({
-    Title = "Fish Hub", -- Judul pendek biar rapi
-    SubTitle = "Mobile",
-    TabWidth = 120, -- Lebar tab diperkecil
-    Size = UDim2.fromOffset(420, 320), -- UKURAN DI PERKECIL (Pas buat HP)
-    Acrylic = false, 
-    Theme = "Dark",
-    MinimizeKey = Enum.KeyCode.LeftControl
+local Window = OrionLib:MakeWindow({
+    Name = "Fish Hub Mobile", 
+    HidePremium = false, 
+    SaveConfig = false, 
+    ConfigFolder = "FishHubMobile",
+    IntroEnabled = false -- Matikan intro biar cepat
 })
 
-local Tabs = {
-    Main = Window:AddTab({ Title = "Fish", Icon = "fish" }),
-    Farm = Window:AddTab({ Title = "Maps", Icon = "map" }),
-    Player = Window:AddTab({ Title = "Fly", Icon = "plane" }),
-    Settings = Window:AddTab({ Title = "System", Icon = "settings" })
-}
-
-local Options = Fluent.Options
-local NetFolder -- Variabel untuk remote events
-
--- Fungsi mencari Remote Event otomatis
+-- Variabel Remote
+local NetFolder
 local function getNet()
     if NetFolder then return NetFolder end
     local RS = game:GetService("ReplicatedStorage")
@@ -51,132 +38,128 @@ local function getNet()
 end
 
 -- ==============================
--- TAB 1: FISHING (AUTO STOP INTEGRATED)
+-- TAB 1: FISHING
 -- ==============================
+local TabFish = Window:MakeTab({Name = "Fishing", Icon = "rbxassetid://4483345998", PremiumOnly = false})
 
-local CastStrength = Tabs.Main:AddSlider("CastStrength", {
-    Title = "Power Lempar",
-    Default = 100, Min = 10, Max = 100, Rounding = 1
+TabFish:AddSection({Name = "Fitur Utama"})
+
+TabFish:AddToggle({
+    Name = "Auto Cast (Lempar Otomatis)",
+    Default = false,
+    Callback = function(Value)
+        getgenv().AutoCast = Value
+        task.spawn(function()
+            while getgenv().AutoCast and getgenv().ScriptActive do
+                local folder = getNet()
+                if folder then
+                    local event = folder:FindFirstChild("RF/RequestFishingMinigameStarted")
+                    if event then
+                        -- Kekuatan lempar max (100)
+                        event:InvokeServer(unpack({100, 1.0, tick()}))
+                    end
+                end
+                task.wait(3.5)
+            end
+        end)
+    end
 })
 
-local ToggleCast = Tabs.Main:AddToggle("AutoCast", {Title = "Auto Cast (Lempar)", Default = false })
-
-ToggleCast:OnChanged(function()
-    task.spawn(function()
-        -- Loop Cek: Apakah tombol nyala DAN Script masih aktif?
-        while Options.AutoCast.Value and getgenv().ScriptActive do
-            local folder = getNet()
-            if folder then
-                local event = folder:FindFirstChild("RF/RequestFishingMinigameStarted")
-                if event then
-                    event:InvokeServer(unpack({Options.CastStrength.Value, 1.0, tick()}))
+TabFish:AddToggle({
+    Name = "Instant Catch (Langsung Dapat)",
+    Default = false,
+    Callback = function(Value)
+        getgenv().AutoCatch = Value
+        task.spawn(function()
+            while getgenv().AutoCatch and getgenv().ScriptActive do
+                local folder = getNet()
+                if folder then
+                    local event = folder:FindFirstChild("RE/FishingCompleted")
+                    if event then
+                        event:FireServer()
+                    end
                 end
+                task.wait(1.5)
             end
-            task.wait(3.5)
-        end
-    end)
-end)
-
-local ToggleCatch = Tabs.Main:AddToggle("InstantCatch", {Title = "Auto Catch (Tangkap)", Default = false })
-
-ToggleCatch:OnChanged(function()
-    task.spawn(function()
-        while Options.InstantCatch.Value and getgenv().ScriptActive do
-            local folder = getNet()
-            if folder then
-                local event = folder:FindFirstChild("RE/FishingCompleted")
-                if event then
-                    event:FireServer()
-                end
-            end
-            task.wait(1.5)
-        end
-    end)
-end)
-
--- ==============================
--- TAB 2: TELEPORT
--- ==============================
-Tabs.Farm:AddButton({
-    Title = "Teleport Spawn",
-    Callback = function()
-        if game.Players.LocalPlayer.Character then
-            game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(0, 50, 0)
-        end
+        end)
     end
 })
 
 -- ==============================
--- TAB 3: FLY (JOYSTICK)
+-- TAB 2: PLAYER & FLY
 -- ==============================
+local TabPlayer = Window:MakeTab({Name = "Player", Icon = "rbxassetid://4483345998", PremiumOnly = false})
+
 local flySpeed = 50
-Tabs.Player:AddSlider("FlySpeed", {
-    Title = "Kecepatan Fly", Default = 50, Min = 10, Max = 150, Rounding = 1,
-    Callback = function(v) flySpeed = v end
+TabPlayer:AddSlider({
+    Name = "Kecepatan Terbang",
+    Min = 10, Max = 150, Default = 50, Color = Color3.fromRGB(255,255,255),
+    Increment = 1,
+    ValueName = "Speed",
+    Callback = function(Value)
+        flySpeed = Value
+    end
 })
 
-local ToggleFly = Tabs.Player:AddToggle("FlyMode", {Title = "Fitur Terbang", Default = false })
+TabPlayer:AddToggle({
+    Name = "Aktifkan Terbang (Joystick)",
+    Default = false,
+    Callback = function(Value)
+        getgenv().FlyMode = Value
+        local plr = game.Players.LocalPlayer
+        local char = plr.Character or plr.CharacterAdded:Wait()
+        local hrp = char:WaitForChild("HumanoidRootPart")
+        local humanoid = char:WaitForChild("Humanoid")
 
-ToggleFly:OnChanged(function()
-    local state = Options.FlyMode.Value
-    local plr = game.Players.LocalPlayer
-    local char = plr.Character or plr.CharacterAdded:Wait()
-    local humanoid = char:WaitForChild("Humanoid")
-    local hrp = char:WaitForChild("HumanoidRootPart")
-
-    if state and getgenv().ScriptActive then
-        local bv = Instance.new("BodyVelocity")
-        bv.Name = "FlyVel"
-        bv.Parent = hrp
-        bv.MaxForce = Vector3.new(Math.huge, Math.huge, Math.huge)
-        bv.Velocity = Vector3.new(0,0,0)
-        humanoid.PlatformStand = true 
-        
-        task.spawn(function()
-            -- Loop akan mati otomatis jika ScriptActive jadi false
-            while Options.FlyMode.Value and char and getgenv().ScriptActive do
-                local cam = workspace.CurrentCamera
-                if humanoid.MoveDirection.Magnitude > 0 then
-                    bv.Velocity = cam.CFrame.LookVector * flySpeed
-                else
-                    bv.Velocity = Vector3.new(0,0,0)
+        if Value then
+            local bv = Instance.new("BodyVelocity")
+            bv.Name = "FlyVel"
+            bv.Parent = hrp
+            bv.MaxForce = Vector3.new(Math.huge, Math.huge, Math.huge)
+            bv.Velocity = Vector3.new(0,0,0)
+            humanoid.PlatformStand = true
+            
+            task.spawn(function()
+                while getgenv().FlyMode and char and getgenv().ScriptActive do
+                    local cam = workspace.CurrentCamera
+                    if humanoid.MoveDirection.Magnitude > 0 then
+                        bv.Velocity = cam.CFrame.LookVector * flySpeed
+                    else
+                        bv.Velocity = Vector3.new(0,0,0)
+                    end
+                    task.wait()
                 end
-                task.wait()
-            end
-            -- Bersihkan jika loop berhenti
+                if hrp:FindFirstChild("FlyVel") then hrp.FlyVel:Destroy() end
+                humanoid.PlatformStand = false
+            end)
+        else
             if hrp:FindFirstChild("FlyVel") then hrp.FlyVel:Destroy() end
             humanoid.PlatformStand = false
-        end)
-    else
-        if hrp:FindFirstChild("FlyVel") then hrp.FlyVel:Destroy() end
-        humanoid.PlatformStand = false
+        end
     end
-end)
+})
 
 -- ==============================
--- TAB 4: SYSTEM (MATIKAN TOTAL)
+-- TAB 3: SYSTEM (KILL SWITCH)
 -- ==============================
-Tabs.Settings:AddButton({
-    Title = "❌ Matikan Script & Tutup",
-    Description = "Klik ini untuk mematikan semua fitur & menutup menu",
+local TabSys = Window:MakeTab({Name = "System", Icon = "rbxassetid://4483345998", PremiumOnly = false})
+
+TabSys:AddButton({
+    Name = "❌ MATIKAN SCRIPT (Tutup Total)",
     Callback = function()
-        -- 1. Matikan Global Switch
-        getgenv().ScriptActive = false 
+        -- 1. Matikan Loop
+        getgenv().ScriptActive = false
+        getgenv().AutoCast = false
+        getgenv().AutoCatch = false
+        getgenv().FlyMode = false
         
-        -- 2. Matikan semua toggle visual
-        Options.AutoCast:SetValue(false)
-        Options.InstantCatch:SetValue(false)
-        Options.FlyMode:SetValue(false)
+        -- 2. Hapus UI
+        OrionLib:Destroy()
         
-        -- 3. Hapus UI
-        Fluent:Destroy()
-        
-        -- 4. Hapus Tombol HP
+        -- 3. Hapus Tombol HP
         if game.Players.LocalPlayer.PlayerGui:FindFirstChild("TombolMenuAlghi") then
             game.Players.LocalPlayer.PlayerGui.TombolMenuAlghi:Destroy()
         end
-        
-        print("Script dimatikan total.")
     end
 })
 
@@ -184,7 +167,6 @@ Tabs.Settings:AddButton({
 -- TOMBOL HP: DRAGGABLE (BISA DIGESER)
 -- ==============================
 spawn(function()
-    -- Hapus tombol lama jika ada
     if game.Players.LocalPlayer.PlayerGui:FindFirstChild("TombolMenuAlghi") then
         game.Players.LocalPlayer.PlayerGui.TombolMenuAlghi:Destroy()
     end
@@ -196,13 +178,11 @@ spawn(function()
     
     local Btn = Instance.new("TextButton")
     Btn.Parent = ScreenGui
-    Btn.Size = UDim2.new(0, 45, 0, 45) -- Lebih kecil dikit
+    Btn.Size = UDim2.new(0, 45, 0, 45)
     Btn.Position = UDim2.new(0, 20, 0.4, 0)
     Btn.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
     Btn.Text = "M"
-    Btn.TextSize = 20
     Btn.TextColor3 = Color3.new(1,1,1)
-    Btn.Font = Enum.Font.FredokaOne
     
     local Corner = Instance.new("UICorner")
     Corner.CornerRadius = UDim.new(1,0)
@@ -210,10 +190,7 @@ spawn(function()
     
     -- LOGIKA DRAG (BISA DIGESER)
     local UserInputService = game:GetService("UserInputService")
-    local dragging
-    local dragInput
-    local dragStart
-    local startPos
+    local dragging, dragInput, dragStart, startPos
 
     local function update(input)
         local delta = input.Position - dragStart
@@ -227,9 +204,7 @@ spawn(function()
             startPos = Btn.Position
             
             input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    dragging = false
-                end
+                if input.UserInputState == Enum.UserInputState.End then dragging = false end
             end)
         end
     end)
@@ -241,13 +216,17 @@ spawn(function()
     end)
 
     UserInputService.InputChanged:Connect(function(input)
-        if input == dragInput and dragging then
-            update(input)
-        end
+        if input == dragInput and dragging then update(input) end
     end)
     
-    -- FUNGSI KLIK: Buka/Tutup Menu
+    -- Fungsi Klik: Buka/Tutup Orion
     Btn.MouseButton1Click:Connect(function()
-        game:GetService("VirtualInputManager"):SendKeyEvent(true, Enum.KeyCode.LeftControl, false, game)
-        task.wait()
-        game:GetService("Virtual
+        -- Orion default keybind is RightControl, but we simulate standard toggle
+        local ui = game:GetService("CoreGui"):FindFirstChild("Orion")
+        if ui then
+            ui.Enabled = not ui.Enabled
+        end
+    end)
+end)
+
+OrionLib:Init()
